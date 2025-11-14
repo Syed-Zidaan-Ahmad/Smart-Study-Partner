@@ -236,11 +236,28 @@ $("btnExport").addEventListener('click', () => {
   const a = document.createElement('a'); a.href = url; a.download = 'my-notes.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   addActivity('Exported local notes');
 });
-// Quick quiz (offline/demo)
-$("btnQuickQuiz").addEventListener('click', () => {
-  if (!selectedNoteId) { alert('Select a note first'); return; }
-  appendChat('Quick quiz (offline): Summarize the note in one sentence.', 'partner');
-  addActivity('Generated quick quiz (offline)');
+// Quick quiz generation
+$("btnQuickQuiz").addEventListener('click', async () => {
+  if (!selectedNoteText.trim()) {
+    alert("Select or load a note first");
+    return;
+  }
+  appendChat("Generating your personalized quiz… 🔄", "partner");
+  try {
+    const response = await fetch("https://smart-study-partner.onrender.com/chat/quiz", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        noteText: selectedNoteText
+      })
+    });
+    const data = await response.json();
+    appendChat(data.quiz, "partner");
+    addActivity("Generated AI-based quiz");
+  } catch (err) {
+    console.error("Quiz API error:", err);
+    appendChat("Sorry, I couldn't generate the quiz due to a server problem.", "partner");
+  }
 });
 // Chat send (with backend API)
 $("btnSendMessage").addEventListener('click', async () => {
