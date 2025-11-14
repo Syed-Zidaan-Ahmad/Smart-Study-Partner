@@ -9,62 +9,57 @@ import os
 app = Flask(__name__)
 CORS(app)
 # Configure Gemini API key
-# DO NOT HARDCODE | READ FROM ENV
+# No need to set the API key as it is set in Render environment variables
 GEMINI_KEY = os.getenv("GEMINI_KEY") or os.getenv("GEMINI_API_KEY")  # Your Gemini API key
 # Ensure the API key is set
 if not GEMINI_KEY:
     raise Exception("❌ Gemini API key missing! Set GEMINI_API_KEY in Render environment")
 genai.configure(api_key=GEMINI_KEY)
+# Main model initialization
 model = genai.GenerativeModel("gemini-2.5-pro")
 # Health check endpoint
 @app.route("/")
 def home():
     return {"status": "Smart Study Partner backend running"}
-# CHAT ENDPOINT
+# Chat Endpoint
 @app.route("/chat/ask", methods=["POST"])
 def chat():
     try:
         data = request.get_json()
         message = data.get("message", "")
         noteText = data.get("noteText", "")
-
         if not message:
             return jsonify({"reply": "Please ask something"}), 200
-
+        # prompt for structured explanation
         prompt = f"""
 You are **Smart Study Partner**, an AI designed to help students understand any subject with clarity, structure, and high accuracy.
 
 Your responsibilities:
 1. Read the user's message carefully.
 2. Analyze the related notes deeply.
-3. Identify the exact topics inside the notes or question.  
+3. Identify the exact topics inside the notes or question.
 4. Break the explanation into **Topic 1, Topic 2, Topic 3...** format.
 5. For each topic:
-     - Give a clear definition  
+     - Give a clear definition
      - Explain in bullet points  
-     - Add short examples if helpful 
+     - Add short examples if helpful
      - NEVER generate tables or Markdown tables.
-     - NEVER use grid-like formatting such as | --- | or | col | col |. 
-     - Keep explanation exam-oriented and beginner-friendly
-6. If the user's query belongs to a specific subject (OS, DBMS, OOPS, Networks, Maths, Reasoning etc.), clearly mention the subject at the top.
-7. If multiple concepts are present, **separate them cleanly** so the user never gets confused.
-8. Communicate like a helpful human teacher:
-     - Friendly tone
-     - Motivating
-     - Clear guidance
+     - NEVER use formatting like | ---- | columns or grids.
+     - Keep explanation exam-oriented and beginner-friendly.
+6. If the user's query belongs to a specific subject (OS, DBMS, OOPS, CN, Maths, Reasoning), mention the subject at the very top.
+7. Separate concepts cleanly so the user never gets confused.
+8. Communicate like a helpful teacher (friendly + clear).
 9. When helpful, use:
      - Steps
-     - Tables
      - Comparisons
      - Formula breakdowns
 10. If notes are unclear or incomplete, intelligently fill the gaps.
-11. Avoid unnecessary text. Keep it meaningful and crisp.
+11. Avoid unnecessary paragraphs.
 12. Always end with:
      - A short 2–3 line **master summary**
      - Optional quick-check questions if appropriate
-13. NEVER use tables. NEVER merge everything into a single block.  
-Keep everything clean, spaced, and extremely easy to read.
-Now produce the BEST possible explanation.
+13. NEVER, EVER use tables.
+14. Keep spacing clean, readable, and organized.
 
 User Message:
 {message}
@@ -73,6 +68,7 @@ Related Notes:
 {noteText}
 
 Give a structured, topic-wise explanation using:
+
 Topic 1:
 - 
 -
@@ -83,14 +79,87 @@ Topic 2:
 
 Continue this format until all ideas are covered.
 """
-        # Generate response from Gemini model
         response = model.generate_content(prompt)
         reply = response.text if response else "No response"
-        # Return the generated reply
         return jsonify({"reply": reply}), 200
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"reply": "Server error"}), 500
+# Quiz Generation Endpoint
+@app.route("/chat/quiz", methods=["POST"])
+def generate_quiz():
+    try:
+        data = request.get_json()
+        noteText = data.get("noteText", "")
+
+        if not noteText.strip():
+            return jsonify({"quiz": "No notes found to generate quiz."}), 200
+
+        quiz_prompt = f"""
+You are Smart Study Partner.
+
+Generate a high-quality quiz based ONLY on the notes below.
+
+Notes:
+{noteText}
+
+Rules for the quiz:
+- Make 5 to 8 conceptual, exam-oriented questions.
+- Mix MCQs + Short answer + True/False.
+- Each question must be clear and meaningful.
+- DO NOT give answers.
+- Number the questions properly.
+- Do NOT use tables.
+- Keep spacing clean, readable, and simple.
+
+Now generate the quiz.
+"""
+        response = model.generate_content(quiz_prompt)
+        quiz = response.text if response else "No quiz generated"
+        # give quiz back
+        return jsonify({"quiz": quiz}), 200
+    except Exception as e:
+        print("QUIZ ERROR:", e)
+        return jsonify({"quiz": "Server error during quiz generation"}), 500
+# Quiz Answers Endpoint
+@app.route("/chat/quiz_answers", methods=["POST"])
+def quiz_answers():
+    try:
+        data = request.get_json()
+        noteText = data.get("noteText", "")
+        quiz = data.get("quiz", "")
+
+        if not noteText.strip() or not quiz.strip():
+            return jsonify({"answers": "Not enough data to generate answers."}), 200
+
+        answers_prompt = f"""
+You are Smart Study Partner.
+
+Below is the quiz generated earlier. Now generate ONLY the correct answers.
+
+Notes:
+{noteText}
+
+Quiz:
+{quiz}
+
+Rules:
+- Give only final answers.
+- Keep them numbered.
+- No explanation.
+- No extra sentences.
+- No table formatting.
+- Clean and simple.
+
+Give the answers now.
+"""
+        response = model.generate_content(answers_prompt)
+        answers = response.text if response else "No answers generated"
+        # give answers back
+        return jsonify({"answers": answers}), 200
+    except Exception as e:
+        print("QUIZ ANSWERS ERROR:", e)
+        return jsonify({"answers": "Server error generating answers"}), 500
 # Initialize the Flask app
 if __name__ == "__main__":
     # Render requires 0.0.0.0 + PORT env
