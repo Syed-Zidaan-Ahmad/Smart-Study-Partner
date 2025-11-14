@@ -1,0 +1,157 @@
+<!-- index.html -->
+
+<!Doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Smart Study Partner by Zidaan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1220">
+  <link rel="stylesheet" href="style.css"> <!-- Linking external CSS file -->
+  <link rel="manifest" href="manifest.json"> <!-- Linking the web app manifest -->
+</head>
+<!-- Body of the webpage -->
+<body>
+  <!-- Main wrapper -->
+  <div class="wrap" role="main">
+    <header class="topbar" aria-label="topbar">
+      <div class="brand">
+        <div class="logo">SP</div>
+        <div class="title">
+          <div class="h1">Smart Study Partner</div>
+          <div class="h2">Personal study companion — conversational</div>
+        </div>
+      </div>
+      <!---->
+      <div class="controls">
+        <div class="chip">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="opacity:.95">
+            <path d="M12 2L14.8 8.9L22 9.6L16 14.1L17.6 21L12 17.7L6.4 21L8 14.1L2 9.6L9.2 8.9L12 2Z" fill="white" opacity="0.12"/>
+          </svg>
+          <div style="display:flex;flex-direction:column;line-height:1">
+            <strong style="font-size:13px">Hackfest 2025</strong>
+            <span class="muted">Team CodeVengers</span>
+          </div>
+        </div>
+        <!---->
+        <div class="chip mode-switch" title="Toggle day / night">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input id="dayNightToggle" type="checkbox" aria-label="toggle day night" style="display:none" />
+            <div id="fakeSwitch" aria-hidden="true">
+              <div id="fakeDot"></div>
+            </div>
+            <span id="modeText" class="small">🌙 Night</span>
+          </label>
+        </div>
+      </div>
+    </header>
+    <!-- LEFT: notes (local-only) -->
+    <div class="left-col panel">
+      <h3>Notes</h3>
+      <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn" id="btnPickNote">Pick a Note</button>
+        <input id="filePicker" type="file" accept=".txt,.md,.doc,.docx,.pdf,.xls,.xlsx,.png,.jpg,.jpeg" style="display:none" />
+        <div class="muted small">Or paste text below and save to your device</div>
+      </div>
+      <!-- Title input -->
+      <div class="field">
+        <input id="inputNoteTitle" type="text" placeholder="Note title (e.g. OS - Scheduling)" />
+      </div>
+      <div class="field">
+        <textarea id="inputNoteText" placeholder="Paste your notes or syllabus here"></textarea>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnSaveNote">Save note</button>
+        <button class="btn ghost" id="btnClearNote">Clear</button>
+      </div>
+      <!-- Notes list -->
+      <div class="notes-list" id="notesList" aria-live="polite" style="margin-top:12px">
+        <div class="muted small">No notes yet — save your first note</div>
+      </div>
+    </div>
+    <!-- CENTER: Chat hologram -->
+    <div class="center-col">
+      <div class="holo">
+        <div class="statusRow">
+          <div class="info">
+            <div class="dot pulse" id="statusDot" aria-hidden="true"></div>
+            <div>
+              <div class="small muted">Active Companion</div>
+              <div><strong id="welcomeText">Hello — ready when you are</strong></div>
+            </div>
+          </div>
+          <div class="controls">
+            <div class="system-note small muted" id="selectedNoteLabel">No note selected</div>
+            <div class="chip small" id="connectedHint">Local demo</div>
+          </div>
+        </div>
+        <div class="chat-area" id="chatArea" role="log" aria-live="polite">
+          <div class="system-note">Tip: Try "Give me a summary" or "Give me a quick quiz"</div>
+        </div>
+        <div class="chat-input-row">
+          <textarea id="inputMessage" class="input-chat" placeholder="Ask your study partner (e.g. 'Give me a short summary')"></textarea>
+          <div class="input-actions">
+            <button class="btn" id="btnSendMessage">Send</button>
+            <button class="btn ghost" id="btnQuickQuiz">Quick Quiz</button>
+          </div>
+        </div>
+      </div>
+      <!-- Demo flow -->
+      <div class="holo pitch" aria-hidden="true">
+        <div>
+          <div class="demo-title">Demo flow (two minutes)</div>
+          <div class="muted small">Pick note → Paste text → Select note → Ask “Give me a quiz”
+</div>
+        </div>
+        <div style="text-align:right">
+          <div class="muted small">Prepared for</div>
+          <div class="muted strong">Hackfest 2025</div>
+          <div class="muted small">Team CodeVengers</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: dashboard -->
+    <div class="right-col panel">
+      <h3>Study Stats</h3>
+      <div class="muted small">Your progress at a glance</div>
+
+      <div class="stats" aria-hidden="true">
+        <div class="stat-card">
+          <div class="label small">Focus score</div>
+          <div class="big" id="statFocus">0%</div>
+          <div class="muted small">Based on your interactions</div>
+        </div>
+        <div class="stat-card">
+          <div class="label small">Active topics</div>
+          <div class="big" id="statTopics">0</div>
+          <div class="muted small">Saved notes</div>
+        </div>
+      </div>
+      <!-- Activity feed -->
+      <div class="activity">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">Recent activity</div>
+          <div class="muted small">Last 24h</div>
+        </div>
+        <ul id="activityList" class="activityList">
+          <li class="muted small">No activity yet — save a note to start</li>
+        </ul>
+      </div>
+      <div style="margin-top:12px;text-align:center">
+        <button class="btn" id="btnExport">Export notes (json)</button>
+      </div>
+    </div>
+    <!-- footer area (presentation grade) -->
+    <footer class="footer-bar" role="contentinfo">
+      <div class="footer-right" style="width:100%;text-align:center">
+        🚀 Smart Study Partner © 2025 | Built by Syed Zidaan Ahmad
+      </div>
+    </footer>
+  </div>
+  <script src="script.js"></script> <!--Linking external JavaScript file-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script> <!-- Linking PDF.js library for PDF parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script> <!-- Linking Mammoth.js library for DOCX parsing -->
+</body>
+</html>
+<!--End of Program (Program by Zidaan)-->

@@ -1,0 +1,23 @@
+{
+  "name": "Smart Study Partner",
+  "short_name": "Smart Study Partner",
+  "description": "An AI-powered study partner to help you learn smarter. Just upload your study materials and let the AI assist you! Also you can create your notes and save them for later.\n A PWA developed by Syed Zidaan Ahmad.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#071020",
+  "theme_color": "#071020",
+  "serviceworker": "service-worker.js",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

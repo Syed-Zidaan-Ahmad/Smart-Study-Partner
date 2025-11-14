@@ -1,0 +1,5 @@
+Hi, I’m Syed Zidaan Ahmad, a passionate developer currently exploring the world of AI-driven applications and intelligent study tools. I enjoy building products that not only function well but genuinely help people in their daily challenges.
+
+My core strengths are in frontend development, UI logic, and transforming ideas into practical tools that users can actually benefit from. I love experimenting with new ways to make technology feel more human, especially in education, where learning often fails to feel personal.
+
+I believe that problem-solving should be simple, approachable, and fun. That mindset inspired me to create Smart Study Partner. For me, the goal is not just to build software, but to create experiences that support real human needs. I’m always excited to explore challenges, learn new skills, and bring ideas to life.

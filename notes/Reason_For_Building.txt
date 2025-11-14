@@ -1,0 +1,10 @@
+Smart Study Partner is an AI based conversational web app designed to make studying feel lighter and more personal. The core idea is simple — students can upload their notes or syllabus and interact with an AI companion that talks naturally, explains topics, creates quick quizzes, tracks progress and guides them on what to focus on. Instead of overwhelming students with features, it acts like a calm friend who helps during exam pressure.
+
+We started this idea because as students we often struggled with revision. Long chapters, unclear topics, and no clue about important sections made preparation stressful. Many times we wished someone could just sit with us, understand our level and guide us in simple words. That thought became the starting point of Smart Study Partner. Our goal is to make studying smarter not harder. We built this because we have personally faced these problems and genuinely wanted to fix them.
+
+Our approach is practical. We focused on keeping the tool simple so that anyone can use it without confusion. The interface is friendly, the workflow is natural and the experience is more like a conversation than a typical chatbot. The companion feels like a study buddy who understands your pace and mood, rather than a strict teacher.
+
+Technologies and tools we used:
+Frontend uses HTML CSS and JavaScript to build an interactive and responsive interface. Notes can be picked directly from files like text doc pdf and images making it easy to bring in material. We chose a local first approach so saved notes stay with the user without needing login. Gemini API is used through a lightweight Python Flask backend to generate helpful answers summaries and quizzes. The structure is intentionally clean and focused on real student needs.
+
+In simple words Smart Study Partner is built because we know what exam stress feels like and we wanted to create something we ourselves would have loved to use.

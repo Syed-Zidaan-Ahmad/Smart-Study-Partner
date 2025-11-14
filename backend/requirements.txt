@@ -1,0 +1,7 @@
+Flask
+Flask-Cors
+google-generativeai
+google-auth
+google-api-python-client
+gunicorn
+python-dotenv
