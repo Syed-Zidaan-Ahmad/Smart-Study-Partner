@@ -10,6 +10,41 @@ const statTopics = $("statTopics");
 let selectedNoteId = null;
 let selectedNoteText = "";
 let interactionsCount = 0;
+// Supabase configuration
+const SUPABASE_URL = "https://YOUR-PROJECT.supabase.co"; // <- replace
+const SUPABASE_ANON_KEY = "YOUR-ANON-KEY"; // <- replace
+// runtime supabase client (will be set after the library loads)
+let supabaseClient = null;
+let supabaseReady = false;
+// Function to load Supabase SDK dynamically
+function loadSupabaseSdk() {
+  return new Promise((resolve, reject) => {
+    if (window.supabase && window.supabase.createClient) {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      supabaseReady = true;
+      return resolve();
+    }
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js";
+    s.onload = () => {
+      try {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabaseReady = true;
+        resolve();
+      } catch (err) {
+        console.warn("Supabase init failed", err);
+        supabaseReady = false;
+        resolve(); // resolve anyway, we'll fallback to localStorage
+      }
+    };
+    s.onerror = (e) => {
+      console.warn("Failed to load supabase sdk", e);
+      supabaseReady = false;
+      resolve(); // resolve so UI still works with localStorage fallback
+    };
+    document.head.appendChild(s);
+  });
+}
 // Function to append chat messages
 function appendChat(text, who = "partner") {
   const el = document.createElement("div");
@@ -45,26 +80,125 @@ document.querySelector('.mode-switch').addEventListener('click', () => {
 });
 // Initial hint
 appendChat("Welcome — paste notes and ask 'Give me a summary' to start.", "partner");
-// Functions to manage local notes in localStorage
+// Local notes management
 function getLocalNotes() {
   try {
     const s = localStorage.getItem('ssp_notes');
     return s ? JSON.parse(s) : [];
   } catch (e) { return []; }
 }
-// Function to save notes array to localStorage
+// Save notes array locally
 function saveLocalNotes(arr) {
   localStorage.setItem('ssp_notes', JSON.stringify(arr));
 }
-// Function to save a single note object to localStorage
+// Save a single note object locally
 function saveLocalNoteObj(note) {
   const notes = getLocalNotes();
   notes.unshift(note);
   saveLocalNotes(notes);
 }
-// Function to render notes list
+//My supabase cloud functions
+async function saveNoteToCloud(note) {
+  // note: { id, title, text, created_at }
+  if (!supabaseReady || !supabaseClient) return { ok: false, error: "supabase-not-ready" };
+  try {
+    const { data, error } = await supabaseClient
+      .from('notes')
+      .insert([{ title: note.title, content: note.text, created_at: note.created_at }])
+      .select()
+      .limit(1);
+    if (error) return { ok: false, error };
+    if (data && data.length) {
+      // update local note id to cloud id for future deletes/edits
+      return { ok: true, row: data[0] };
+    } else {
+      return { ok: false, error: "no-data-returned" };
+    }
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+// Function to get notes from cloud
+async function getNotesFromCloud() {
+  if (!supabaseReady || !supabaseClient) return { ok: false, error: "supabase-not-ready" };
+  try {
+    const { data, error } = await supabaseClient
+      .from('notes')
+      .select('id,title,content,created_at')
+      .order('created_at', { ascending: false });
+    if (error) return { ok: false, error };
+    return { ok: true, rows: data };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+// Function to delete a note from cloud
+async function deleteNoteFromCloud(cloudId) {
+  if (!supabaseReady || !supabaseClient) return { ok: false, error: "supabase-not-ready" };
+  try {
+    const { data, error } = await supabaseClient
+      .from('notes')
+      .delete()
+      .eq('id', cloudId);
+    if (error) return { ok: false, error };
+    return { ok: true, rows: data };
+  } catch (err) {
+    return { ok: false, error: err };
+  }
+}
+// Function to render notes list (cloud first, then local)
 function renderNotesList() {
   const list = $("notesList");
+  list.innerHTML = "";
+  // Attempt to use cloud notes first if supabase is initialized
+  if (supabaseReady) {
+    getNotesFromCloud().then(res => {
+      if (res.ok && Array.isArray(res.rows) && res.rows.length) {
+        // convert cloud rows to the same shape as local notes for rendering
+        const cloudNotes = res.rows.map(r => ({
+          id: r.id,
+          title: r.title || 'Untitled',
+          text: r.content || '',
+          created_at: r.created_at || new Date().toISOString()
+        }));
+        // render cloud notes
+        cloudNotes.forEach(n => {
+          const div = document.createElement('div');
+          div.className = 'note-item';
+          div.tabIndex = 0;
+          div.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px; width:100%;">
+              <strong>${n.title}</strong>
+              <span class="note-delete" data-id="${n.id}">×</span>
+            </div>
+            <div class="muted small">${new Date(n.created_at).toLocaleString()}</div>
+          `;
+          div.addEventListener('click', () => selectNote(n.id));
+          list.appendChild(div);
+        });
+        // Attach delete listeners
+        list.querySelectorAll('.note-delete').forEach(del => {
+          del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = del.getAttribute('data-id');
+            confirmDelete(id, del.closest(".note-item"), { cloud: true });
+          });
+        });
+        statTopics.textContent = cloudNotes.length;
+      } else {
+        // fallback to localStorage if cloud empty or error
+        renderLocalNotes(list);
+      }
+    }).catch(() => {
+      renderLocalNotes(list);
+    });
+  } else {
+    renderLocalNotes(list);
+  }
+}
+// Function to render local notes only
+function renderLocalNotes(listEl = null) {
+  const list = listEl || $("notesList");
   const notes = getLocalNotes();
   list.innerHTML = "";
   if (!notes.length) {
@@ -84,21 +218,44 @@ function renderNotesList() {
       div.addEventListener('click', () => selectNote(n.id));
       list.appendChild(div);
     });
-  }
-  // Attach delete event listeners
-  list.querySelectorAll('.note-delete').forEach(del => {
-    del.addEventListener('click', (e) => {
-      e.stopPropagation();  // prevent note selection
-      const id = del.getAttribute('data-id');
-      confirmDelete(id, del.closest(".note-item")); // smoother deletion
+    // Attach delete event listeners
+    list.querySelectorAll('.note-delete').forEach(del => {
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = del.getAttribute('data-id');
+        confirmDelete(id, del.closest(".note-item"), { cloud: false });
+      });
     });
-  });
-  statTopics.textContent = notes.length;
+  }
+  statTopics.textContent = getLocalNotes().length;
 }
 // Function to select a note
 function selectNote(id) {
-  const notes = getLocalNotes();
-  const note = notes.find(n => n.id === id);
+  // Try to find locally first
+  const localNotes = getLocalNotes();
+  let note = localNotes.find(n => n.id === id);
+  if (!note && supabaseReady) {
+    // try cloud fetch
+    // fetch single note from cloud
+    (async () => {
+      try {
+        const { data, error } = await supabaseClient.from('notes').select('id,title,content,created_at').eq('id', id).limit(1);
+        if (!error && data && data.length) {
+          note = { id: data[0].id, title: data[0].title, text: data[0].content, created_at: data[0].created_at };
+          selectedNoteId = id;
+          selectedNoteText = note.text || "";
+          $("selectedNoteLabel").textContent = note.title;
+          appendChat(`Selected note: ${note.title}`, "partner");
+          addActivity(`Selected note: ${note.title}`);
+        } else {
+          if (!note) { alert('Note not found'); }
+        }
+      } catch (err) {
+        if (!note) { alert('Note not found'); }
+      }
+    })();
+    return;
+  }
   if (!note) { alert('Note not found'); return; }
   selectedNoteId = id;
   selectedNoteText = note.text || "";
@@ -107,16 +264,33 @@ function selectNote(id) {
   addActivity(`Selected note: ${note.title}`);
 }
 // Function to confirm and delete a note
-function confirmDelete(id, itemEl) {
+function confirmDelete(id, itemEl, opts = { cloud: false }) {
   const ok = confirm("Are you sure you want to delete this note?");
   if (!ok) return;
   itemEl.classList.add("deleting");
-  setTimeout(() => {
-    deleteNote(id);
+  setTimeout(async () => {
+    if (opts.cloud && supabaseReady) {
+      // delete from cloud
+      const res = await deleteNoteFromCloud(id);
+      if (res.ok) {
+        // remove any local copy that matches this cloud id if present
+        let notes = getLocalNotes();
+        notes = notes.filter(n => n.id !== id);
+        saveLocalNotes(notes);
+        renderNotesList();
+        appendChat("Note deleted.", "partner");
+        addActivity("Deleted a note");
+      } else {
+        alert("Failed to delete from cloud. Deleting locally instead.");
+        deleteNoteLocal(id);
+      }
+    } else {
+      deleteNoteLocal(id);
+    }
   }, 250);
 }
-// Function to delete a note
-function deleteNote(id) {
+// Function to delete a note locally
+function deleteNoteLocal(id) {
   let notes = getLocalNotes();
   notes = notes.filter(n => n.id !== id);
   saveLocalNotes(notes);
@@ -131,23 +305,43 @@ $("filePicker").addEventListener('change', async (ev) => {
   if (!f) return;
   const name = f.name || 'picked-file';
   const ext = name.split('.').pop().toLowerCase();
-
   async function finalizeLoadedNote(title, text) {
     $("inputNoteTitle").value = title;
     $("inputNoteText").value = text;
     selectedNoteText = text;
-
     const newNote = {
       id: Date.now().toString(),
       title,
       text,
       created_at: new Date().toISOString()
     };
+    // Save locally first
     saveLocalNoteObj(newNote);
     renderNotesList();
     $("selectedNoteLabel").textContent = title;
+    // Try to save to cloud in background (hybrid approach)
+    if (supabaseReady) {
+      const cloudRes = await saveNoteToCloud(newNote);
+      if (cloudRes.ok && cloudRes.row && cloudRes.row.id) {
+        // Replace local note id with cloud id for future operations
+        let notes = getLocalNotes();
+        notes = notes.map(n => {
+          if (n.id === newNote.id) {
+            return { ...n, id: cloudRes.row.id };
+          }
+          return n;
+        });
+        saveLocalNotes(notes);
+        renderNotesList();
+        addActivity(`Saved note to cloud: ${title}`);
+      } else {
+        // keep local only and notify
+        addActivity(`Saved locally (cloud failed): ${title}`);
+      }
+    } else {
+      addActivity(`Saved locally: ${title}`);
+    }
   }
-
   if (ext === 'txt' || ext === 'md') {
     const text = await f.text();
     await finalizeLoadedNote(name.replace(/\.[^/.]+$/, ""), text);
@@ -190,10 +384,11 @@ $("filePicker").addEventListener('change', async (ev) => {
     alert('This file type is not supported for automatic text extraction yet. You can open it locally and copy-paste the text into the editor.');
     addActivity(`Picked unsupported file: ${name}`);
   }
+  // reset input so same file can be picked again
   ev.target.value = '';
 });
 // Save note locally and offer download for .txt or .doc
-$("btnSaveNote").addEventListener('click', () => {
+$("btnSaveNote").addEventListener('click', async () => {
   const title = $("inputNoteTitle").value.trim() || 'Untitled';
   const text = $("inputNoteText").value.trim();
   if (!text) { alert('Please paste your notes to save'); return; }
@@ -201,10 +396,28 @@ $("btnSaveNote").addEventListener('click', () => {
   saveLocalNoteObj(note);
   renderNotesList();
   addActivity(`Saved note: ${title}`);
+  // Try to save to cloud as well (background)
+  if (supabaseReady) {
+    const cloudRes = await saveNoteToCloud(note);
+    if (cloudRes.ok && cloudRes.row && cloudRes.row.id) {
+      // update local id -> cloud id
+      let notes = getLocalNotes();
+      notes = notes.map(n => (n.id === note.id ? { ...n, id: cloudRes.row.id } : n));
+      saveLocalNotes(notes);
+      renderNotesList();
+      addActivity(`Saved note to cloud: ${title}`);
+    } else {
+      addActivity(`Cloud save failed for: ${title}`);
+    }
+  } else {
+    addActivity(`Saved locally: ${title}`);
+  }
+  // Ask user for download format (txt or doc)
   let fmt = prompt("Save file format: 'txt' or 'doc' (Word-compatible). Default: txt", 'txt');
   if (!fmt) fmt = 'txt';
   fmt = fmt.toLowerCase();
   if (fmt !== 'txt' && fmt !== 'doc') fmt = 'txt';
+  // Download the file 
   if (fmt === 'txt') {
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -212,6 +425,7 @@ $("btnSaveNote").addEventListener('click', () => {
     a.href = url; a.download = `${title.replace(/[^a-z0-9\-\_ ]/ig, '') || 'note'}.txt`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   } else {
+    // create a simple Word-compatible HTML file (.doc)
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body><h1>${escapeHtml(title)}</h1><pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(text)}</pre></body></html>`;
     const blob = new Blob([html], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
@@ -219,6 +433,7 @@ $("btnSaveNote").addEventListener('click', () => {
     a.href = url; a.download = `${title.replace(/[^a-z0-9\-\_ ]/ig, '') || 'note'}.doc`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }
+  // clear inputs after save
   $("inputNoteTitle").value = '';
   $("inputNoteText").value = '';
 });
@@ -306,9 +521,12 @@ $("inputMessage").addEventListener("keydown", (e) => {
 });
 // Safety net for promises
 window.addEventListener('unhandledrejection', (ev) => { console.warn('Unhandled promise rejection', ev.reason); });
-// Initial render
-renderNotesList();
-updateStats();
+// Initial render and supabase load
+(async function init() {
+  await loadSupabaseSdk();
+  renderNotesList();
+  updateStats();
+})();
 // Service worker registration
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("service-worker.js")
