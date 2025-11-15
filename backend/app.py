@@ -5,6 +5,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
 import os
+import supabase
+from datetime import datetime
 # Initialize Flask app and CORS
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +19,12 @@ if not GEMINI_KEY:
 genai.configure(api_key=GEMINI_KEY)
 # Main model initialization
 model = genai.GenerativeModel("gemini-2.5-pro")
+# SUPABASE: Initialization
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise Exception("❌ Supabase credentials missing! Add SUPABASE_URL and SUPABASE_KEY")
+supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
 # Health check endpoint
 @app.route("/")
 def home():
@@ -30,6 +38,7 @@ def chat():
         noteText = data.get("noteText", "")
         if not message:
             return jsonify({"reply": "Please ask something"}), 200
+
         # prompt for structured explanation
         prompt = f"""
 You are **Smart Study Partner**, an AI designed to help students understand any subject with clarity, structure, and high accuracy.
@@ -79,9 +88,12 @@ Topic 2:
 
 Continue this format until all ideas are covered.
 """
+
         response = model.generate_content(prompt)
         reply = response.text if response else "No response"
+
         return jsonify({"reply": reply}), 200
+
     except Exception as e:
         print("ERROR:", e)
         return jsonify({"reply": "Server error"}), 500
@@ -114,10 +126,12 @@ Rules for the quiz:
 
 Now generate the quiz.
 """
+
         response = model.generate_content(quiz_prompt)
         quiz = response.text if response else "No quiz generated"
-        # give quiz back
+
         return jsonify({"quiz": quiz}), 200
+
     except Exception as e:
         print("QUIZ ERROR:", e)
         return jsonify({"quiz": "Server error during quiz generation"}), 500
@@ -153,13 +167,61 @@ Rules:
 
 Give the answers now.
 """
+
         response = model.generate_content(answers_prompt)
         answers = response.text if response else "No answers generated"
-        # give answers back
+
         return jsonify({"answers": answers}), 200
+
     except Exception as e:
         print("QUIZ ANSWERS ERROR:", e)
         return jsonify({"answers": "Server error generating answers"}), 500
+# Saving notes to Supabase
+@app.route("/notes/save", methods=["POST"])
+def save_note():
+    try:
+        data = request.get_json()
+        title = data.get("title", "")
+        text = data.get("text", "")
+
+        if not text.strip():
+            return jsonify({"status": "Note empty"}), 200
+
+        inserted = supabase_client.table("notes").insert({
+            "title": title,
+            "content": text,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+
+        return jsonify({"status": "saved", "data": inserted.data}), 200
+
+    except Exception as e:
+        print("SUPABASE SAVE ERROR:", e)
+        return jsonify({"status": "error saving note"}), 500
+# Getting notes from Supabase
+@app.route("/notes/get", methods=["GET"])
+def get_notes():
+    try:
+        data = supabase_client.table("notes").select("*").order("created_at", desc=True).execute()
+        return jsonify({"notes": data.data}), 200
+
+    except Exception as e:
+        print("SUPABASE GET ERROR:", e)
+        return jsonify({"notes": []}), 500
+# Deleting notes from Supabase
+@app.route("/notes/delete", methods=["POST"])
+def delete_note():
+    try:
+        data = request.get_json()
+        note_id = data.get("id")
+
+        supabase_client.table("notes").delete().eq("id", note_id).execute()
+
+        return jsonify({"status": "deleted"}), 200
+
+    except Exception as e:
+        print("SUPABASE DELETE ERROR:", e)
+        return jsonify({"status": "error deleting note"}), 500
 # Initialize the Flask app
 if __name__ == "__main__":
     # Render requires 0.0.0.0 + PORT env
